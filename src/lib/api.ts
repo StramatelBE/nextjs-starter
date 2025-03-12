@@ -167,7 +167,7 @@ export async function uploadMedia(file: File, playlistId: number) {
         }
 
         return await response.json();
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error uploading media:', error);
         return { success: false, error: error.message };
     }

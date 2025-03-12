@@ -1,5 +1,3 @@
-'use client';
-
 import { useState, useEffect } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -14,6 +12,14 @@ import {
     TableCell,
     TableRow,
     Typography,
+    Tooltip,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogContentText,
+    DialogTitle,
+    Button,
+    Box,
 } from '@mui/material';
 import Container from '@/components/Container';
 import usePlaylistStore from '@/stores/playlistStore';
@@ -24,7 +30,10 @@ import AddPlaylistDialog from './AddPlaylistDialog';
 
 export default function PlaylistListComponent() {
     const [addDialogOpen, setAddDialogOpen] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [playlistToDelete, setPlaylistToDelete] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
+    const [playlistLoading, setPlaylistLoading] = useState<number | null>(null);
     const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
     const { playlists, setSelectedPlaylist, setPlaylists } = usePlaylistStore();
     const { mode, setMode } = useModeStore();
@@ -52,27 +61,52 @@ export default function PlaylistListComponent() {
         }
     }, [socketData, playlists, setPlaylists]);
 
-    const handleDeletePlaylist = async (id: number) => {
+    const confirmDeletePlaylist = (id: number) => {
+        setPlaylistToDelete(id);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeletePlaylist = async () => {
+        if (!playlistToDelete) {
+            setDeleteDialogOpen(false);
+            return;
+        }
+
         try {
-            const response = await deletePlaylist(id);
+            setLoading(true);
+            const response = await deletePlaylist(playlistToDelete);
+
             if (response.success) {
+                // If we're deleting the active playlist, stop playback
+                if (activePlaylistId === playlistToDelete) {
+                    await updateMode('null', null);
+                    setActivePlaylistId(null);
+                }
+
                 // Remove the playlist from the local state
-                const updatedPlaylists = playlists?.filter(p => p.id !== id) || [];
+                const updatedPlaylists = playlists?.filter(p => p.id !== playlistToDelete) || [];
                 setPlaylists(updatedPlaylists);
             }
         } catch (error) {
             console.error('Failed to delete playlist:', error);
+        } finally {
+            setLoading(false);
+            setDeleteDialogOpen(false);
+            setPlaylistToDelete(null);
         }
     };
 
     const handleSelectPlaylist = async (id: number) => {
         try {
+            setPlaylistLoading(id);
             const response = await fetchPlaylistById(id);
             if (response?.success && response?.data) {
                 setSelectedPlaylist(response.data);
             }
         } catch (error) {
             console.error('Failed to fetch playlist details:', error);
+        } finally {
+            setPlaylistLoading(null);
         }
     };
 
@@ -80,12 +114,14 @@ export default function PlaylistListComponent() {
         setLoading(true);
         try {
             if (activePlaylistId === id) {
+                // Stop the currently playing playlist
                 const response = await updateMode('null', null);
                 if (response.success) {
                     setMode(response.data);
                     setActivePlaylistId(null);
                 }
             } else {
+                // Start playing a different playlist
                 const response = await updateMode('playlist', id);
                 if (response.success) {
                     setMode(response.data);
@@ -101,6 +137,7 @@ export default function PlaylistListComponent() {
 
     const handleAddPlaylist = async (name: string) => {
         try {
+            setLoading(true);
             const response = await createPlaylist(name);
             if (response.success && response.data) {
                 // Add the new playlist to the local state
@@ -109,6 +146,8 @@ export default function PlaylistListComponent() {
             setAddDialogOpen(false);
         } catch (error) {
             console.error('Failed to create playlist:', error);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -125,49 +164,71 @@ export default function PlaylistListComponent() {
                                     {playlists.map((playlist) => (
                                         <TableRow
                                             key={playlist.id}
-                                            sx={{ cursor: 'pointer' }}
+                                            sx={{
+                                                cursor: 'pointer',
+                                                backgroundColor: activePlaylistId === playlist.id ? 'rgba(251, 106, 34, 0.1)' : 'inherit'
+                                            }}
                                             hover
                                             style={{ position: 'relative' }}
                                         >
                                             <TableCell
                                                 onClick={() => handleSelectPlaylist(playlist.id)}
-                                                style={{ padding: '0 16px' }}
+                                                style={{ padding: '8px 16px' }}
                                             >
-                                                {playlist.name}
+                                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                    {playlistLoading === playlist.id ? (
+                                                        <CircularProgress size={16} sx={{ mr: 1 }} />
+                                                    ) : null}
+                                                    <Typography
+                                                        variant="body2"
+                                                        sx={{
+                                                            fontWeight: activePlaylistId === playlist.id ? 'bold' : 'normal',
+                                                        }}
+                                                    >
+                                                        {playlist.name}
+                                                    </Typography>
+                                                </Box>
                                             </TableCell>
-                                            <TableCell style={{ width: 'auto', padding: "16px 0px" }} align="right">
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleTogglePlaylist(playlist.id)}
-                                                    disabled={loading}
-                                                >
-                                                    {activePlaylistId === playlist.id ? (
-                                                        <>
-                                                            <StopIcon sx={{ fontSize: 15, color: 'secondary.main' }} />
-                                                            {loading && (
-                                                                <CircularProgress
-                                                                    size={15}
-                                                                    sx={{
-                                                                        top: 5,
-                                                                        left: 5,
-                                                                        position: 'absolute',
-                                                                        color: 'secondary.main',
-                                                                    }}
-                                                                />
-                                                            )}
-                                                        </>
-                                                    ) : (
-                                                        <PlayArrowIcon sx={{ fontSize: 15, color: 'secondary.main' }} />
-                                                    )}
-                                                </IconButton>
+                                            <TableCell style={{ width: 'auto', padding: "8px 4px" }} align="right">
+                                                <Tooltip title={activePlaylistId === playlist.id ? "Stop Playlist" : "Play Playlist"}>
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => handleTogglePlaylist(playlist.id)}
+                                                        disabled={loading}
+                                                    >
+                                                        {activePlaylistId === playlist.id ? (
+                                                            <>
+                                                                <StopIcon sx={{ fontSize: 18, color: 'secondary.main' }} />
+                                                                {loading && (
+                                                                    <CircularProgress
+                                                                        size={18}
+                                                                        sx={{
+                                                                            top: 5,
+                                                                            left: 5,
+                                                                            position: 'absolute',
+                                                                            color: 'secondary.main',
+                                                                        }}
+                                                                    />
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <PlayArrowIcon sx={{ fontSize: 18, color: 'secondary.main' }} />
+                                                        )}
+                                                    </IconButton>
+                                                </Tooltip>
                                             </TableCell>
-                                            <TableCell style={{ width: 'auto', padding: "16px 0px" }} align="right">
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleDeletePlaylist(playlist.id)}
-                                                >
-                                                    <DeleteIcon sx={{ fontSize: 15, color: 'secondary.main' }} />
-                                                </IconButton>
+                                            <TableCell style={{ width: 'auto', padding: "8px 4px" }} align="right">
+                                                <Tooltip title="Delete Playlist">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            confirmDeletePlaylist(playlist.id);
+                                                        }}
+                                                    >
+                                                        <DeleteIcon sx={{ fontSize: 18, color: 'secondary.main' }} />
+                                                    </IconButton>
+                                                </Tooltip>
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -175,20 +236,52 @@ export default function PlaylistListComponent() {
                             </Table>
                         </div>
                     ) : (
-                        <Typography>No playlists found. Create one to get started.</Typography>
+                        <Box sx={{ p: 2, textAlign: 'center' }}>
+                            <Typography>No playlists found. Create one to get started.</Typography>
+                            <Button
+                                variant="outlined"
+                                sx={{ mt: 2, color: 'secondary.main', borderColor: 'secondary.main' }}
+                                onClick={() => setAddDialogOpen(true)}
+                                startIcon={<AddIcon />}
+                            >
+                                Create Playlist
+                            </Button>
+                        </Box>
                     )
                 }
                 headerRight={
-                    <IconButton className="headerButton" onClick={() => setAddDialogOpen(true)}>
-                        <AddIcon sx={{ color: 'secondary.main' }} />
-                    </IconButton>
+                    <Tooltip title="Add Playlist">
+                        <IconButton className="headerButton" onClick={() => setAddDialogOpen(true)}>
+                            <AddIcon sx={{ color: 'secondary.main' }} />
+                        </IconButton>
+                    </Tooltip>
                 }
             />
+
+            {/* Add Playlist Dialog */}
             <AddPlaylistDialog
                 open={addDialogOpen}
                 onClose={() => setAddDialogOpen(false)}
                 onAdd={handleAddPlaylist}
             />
+
+            {/* Confirm Delete Dialog */}
+            <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+                <DialogTitle>Delete Playlist</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Are you sure you want to delete this playlist? This action cannot be undone.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteDialogOpen(false)} color="primary">
+                        Cancel
+                    </Button>
+                    <Button onClick={handleDeletePlaylist} color="secondary" autoFocus>
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </>
     );
 }

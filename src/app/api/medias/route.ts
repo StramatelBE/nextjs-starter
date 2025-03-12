@@ -6,9 +6,10 @@ import { authMiddleware } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
 import { mkdir } from 'fs/promises';
+import { PathLike } from 'fs';
 
 // Helper function to ensure directory exists
-async function ensureDir(dirPath) {
+async function ensureDir(dirPath: PathLike) {
     try {
         await fs.access(dirPath);
     } catch (error) {

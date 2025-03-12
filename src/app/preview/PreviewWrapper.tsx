@@ -73,7 +73,7 @@ export default function PreviewWrapper() {
 
                 {/* Auto-refresh the page after 30 seconds */}
                 <Box sx={{ display: 'none' }}>
-                    {setTimeout(() => window.location.reload(), 30000)}
+                    s{setTimeout(() => window.location.reload(), 30000)}
                 </Box>
             </Box>
         );
