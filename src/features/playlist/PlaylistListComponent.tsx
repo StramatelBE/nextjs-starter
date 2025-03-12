@@ -113,19 +113,15 @@ export default function PlaylistListComponent() {
     const handleTogglePlaylist = async (id: number) => {
         setLoading(true);
         try {
-            if (activePlaylistId === id) {
-                // Stop the currently playing playlist
-                const response = await updateMode('null', null);
-                if (response.success) {
-                    setMode(response.data);
-                    setActivePlaylistId(null);
-                }
-            } else {
-                // Start playing a different playlist
-                const response = await updateMode('playlist', id);
-                if (response.success) {
-                    setMode(response.data);
-                    setActivePlaylistId(id);
+            const response = await updateMode('playlist', id);
+            if (response.success) {
+                setMode(response.data);
+                setActivePlaylistId(id);
+
+                // Fetch and set the playlist immediately
+                const playlistResponse = await fetchPlaylistById(id);
+                if (playlistResponse.success) {
+                    setSelectedPlaylist(playlistResponse.data);
                 }
             }
         } catch (error) {

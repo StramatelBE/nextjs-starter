@@ -63,9 +63,13 @@ export default function PreviewComponent() {
                     <InformationComponent data={socketData.data} time={currentTime} />
                 </div>
             );
-        } else if (mode?.name === 'playlist' && socketData.playlist) {
+        } else if (mode?.name === 'playlist' && socketData?.playlist) {
             return (
-                <div style={{ border: '1px solid #ccc', height: `${previewHeight}px`, width: `${previewWidth}px` }}>
+                <div style={{
+                    border: '1px solid #ccc',
+                    height: `${previewHeight}px`,
+                    width: `${previewWidth}px`
+                }}>
                     <PlaylistComponent playlist={socketData.playlist} />
                 </div>
             );

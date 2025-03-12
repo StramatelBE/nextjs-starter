@@ -5,65 +5,39 @@ require('dotenv').config();
 const prisma = new PrismaClient();
 const port = parseInt(process.env.NEXT_PUBLIC_WEBSOCKET_PORT) || 8080;
 
-// Create WebSocket server
+// WebSocket server setup
 const wss = new WebSocketServer({ port });
-
 console.log(`WebSocket Server is running on port ${port}`);
 
-// Keep track of active clients and intervals
+// Client and broadcast management
 const clients = new Set();
 let broadcastInterval = null;
 
-// Function to broadcast data to all clients
-async function broadcastData() {
-    if (clients.size === 0) return;
-
+// Enhanced data fetching with error handling and logging
+async function fetchSocketData() {
     try {
-        // Fetch all necessary data
-        let socketData = {};
+        const [modes, data, accidents, settings] = await Promise.all([
+            prisma.mode.findMany(),
+            prisma.data.findMany(),
+            prisma.accident.findMany(),
+            prisma.settings.findMany()
+        ]);
 
-        // Get mode
-        const modes = await prisma.mode.findMany();
-        if (modes.length === 0) {
-            // Create default mode if none exists
-            const defaultMode = await prisma.mode.create({
-                data: {
-                    name: 'null',
-                    playlist_id: null,
-                },
-            });
-            socketData.mode = defaultMode;
-        } else {
-            socketData.mode = modes[0];
-        }
-
-        // Get data (like temperature)
-        const data = await prisma.data.findMany();
-        socketData.data = data;
-
-        // Get accidents
-        const accident = await prisma.accident.findMany();
-        if (accident.length === 0) {
-            // Create default accident if none exists
-            const defaultAccident = await prisma.accident.create({
+        const socketData = {
+            mode: modes[0] || await prisma.mode.create({
+                data: { name: 'null', playlist_id: null }
+            }),
+            data,
+            accident: accidents[0] || await prisma.accident.create({
                 data: {
                     days_without_accident: 0,
                     record_days_without_accident: 0,
                     accidents_this_year: 0,
                     reset_on_new_year: false,
-                    last_updated: new Date(),
-                },
-            });
-            socketData.accident = defaultAccident;
-        } else {
-            socketData.accident = accident[0];
-        }
-
-        // Get settings
-        const settings = await prisma.settings.findMany();
-        if (settings.length === 0) {
-            // Create default settings if none exists
-            const defaultSettings = await prisma.settings.create({
+                    last_updated: new Date()
+                }
+            }),
+            settings: settings[0] || await prisma.settings.create({
                 data: {
                     standby: false,
                     standby_start_time: '22:00',
@@ -71,19 +45,20 @@ async function broadcastData() {
                     restart_at: '03:00',
                     language: 'fr',
                     theme: 'dark',
-                    date: new Date(),
-                },
-            });
-            socketData.settings = defaultSettings;
-        } else {
-            socketData.settings = settings[0];
-        }
+                    date: new Date()
+                }
+            })
+        };
 
-        // If current mode is 'playlist', fetch the playlist details
+        // Fetch playlist details for playlist mode
         if (socketData.mode.name === 'playlist' && socketData.mode.playlist_id) {
             const playlist = await prisma.playlist.findUnique({
                 where: { id: socketData.mode.playlist_id },
-                include: { medias: true },
+                include: {
+                    medias: {
+                        orderBy: { position: 'asc' }
+                    }
+                }
             });
 
             if (playlist) {
@@ -91,33 +66,45 @@ async function broadcastData() {
             }
         }
 
-        // Convert to JSON once instead of for each client
+        return socketData;
+    } catch (error) {
+        console.error('Comprehensive data fetch error:', error);
+        return null;
+    }
+}
+
+// Broadcast data to all connected clients
+async function broadcastData() {
+    if (clients.size === 0) return;
+
+    try {
+        const socketData = await fetchSocketData();
+        if (!socketData) return;
+
         const dataString = JSON.stringify(socketData);
 
-        // Send data to all connected clients
         clients.forEach(client => {
             if (client.readyState === WebSocketServer.OPEN) {
                 try {
                     client.send(dataString);
                 } catch (err) {
-                    console.error('Error sending to client, removing from pool:', err);
+                    console.error('Client send error:', err);
                     clients.delete(client);
                 }
             }
         });
     } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Broadcast error:', error);
     }
 }
 
-// Start broadcasting only when we have clients
+// Manage broadcasting based on client connections
 function startBroadcasting() {
     if (!broadcastInterval && clients.size > 0) {
         broadcastInterval = setInterval(broadcastData, 1000);
     }
 }
 
-// Stop broadcasting when we have no clients
 function stopBroadcasting() {
     if (broadcastInterval && clients.size === 0) {
         clearInterval(broadcastInterval);
@@ -125,27 +112,20 @@ function stopBroadcasting() {
     }
 }
 
-// Handle connections
+// WebSocket connection handling
 wss.on('connection', (ws) => {
     console.log('Client connected');
 
-    // Add client to our set
     clients.add(ws);
-
-    // Start broadcasting if needed
     startBroadcasting();
-
-    // Handle immediate data request
     broadcastData();
 
-    // Clean up on disconnect
     ws.on('close', () => {
         console.log('Client disconnected');
         clients.delete(ws);
         stopBroadcasting();
     });
 
-    // Handle errors
     ws.on('error', (err) => {
         console.error('WebSocket error:', err);
         clients.delete(ws);
@@ -153,24 +133,22 @@ wss.on('connection', (ws) => {
     });
 });
 
-// Handle server shutdown
+// Graceful shutdown
 process.on('SIGINT', () => {
     console.log('Shutting down WebSocket server...');
 
     if (broadcastInterval) {
         clearInterval(broadcastInterval);
-        broadcastInterval = null;
     }
 
     wss.close(() => {
-        console.log('WebSocket server shut down');
         prisma.$disconnect()
             .then(() => {
-                console.log('Database disconnected');
+                console.log('Server and database shutdown complete');
                 process.exit(0);
             })
             .catch(err => {
-                console.error('Error disconnecting from database:', err);
+                console.error('Shutdown error:', err);
                 process.exit(1);
             });
     });

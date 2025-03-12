@@ -2,11 +2,13 @@ import { useEffect, useRef } from "react";
 import useWebSocket from "./useWebSocket";
 import useSocketDataStore from "@/stores/socketDataStore";
 import useStandbyStore from "@/stores/standbyStore";
+import useModeStore from '@/stores/modeStore';
 
 const useData = () => {
     const { setSocketData } = useSocketDataStore();
     const { setStandby, setStandbyTimes, clearStandby, setIsStandby } = useStandbyStore();
     const initializedRef = useRef(false);
+    const { setMode } = useModeStore();
 
     const websocketUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:8080';
 
@@ -16,7 +18,10 @@ const useData = () => {
             try {
                 const parsedData = JSON.parse(event.data);
                 setSocketData(parsedData);
-
+                // Persist mode from socket data
+                if (parsedData?.mode) {
+                    setMode(parsedData.mode);
+                }
                 // Handle standby mode based on settings
                 if (parsedData?.settings) {
                     const { standby, standby_start_time, standby_end_time } = parsedData.settings;

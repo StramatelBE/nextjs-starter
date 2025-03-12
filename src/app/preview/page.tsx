@@ -3,29 +3,51 @@
 import { useEffect, useState } from 'react';
 import useSocketDataStore from '@/stores/socketDataStore';
 import useData from '@/hooks/useData';
+import useModeStore from '@/stores/modeStore';
+import { fetchPlaylistById, fetchMode } from '@/lib/api';
 import AccidentComponent from '@/features/preview/AccidentComponent';
 import InformationComponent from '@/features/preview/InformationComponent';
 import PlaylistComponent from '@/features/preview/PlaylistComponent';
 import TestComponent from '@/features/preview/TestComponent';
 import useStandbyStore from '@/stores/standbyStore';
 
-// Global styles for preview page
-const globalStyle = `
-  body {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-  }
-`;
-
 export default function PreviewPage() {
-    const { isConnected } = useData(); // Initialize the WebSocket connection
+    const { isConnected } = useData();
     const { socketData } = useSocketDataStore();
+    const { mode } = useModeStore();
     const { isStandby } = useStandbyStore();
     const [currentTime, setCurrentTime] = useState(new Date());
-    const [connectionError, setConnectionError] = useState(false);
+    const [playlist, setPlaylist] = useState<any>(null);
 
-    // Update time every second
+    // Comprehensive mode and playlist fetching
+    useEffect(() => {
+        const fetchCurrentMode = async () => {
+            try {
+                // Fetch current mode explicitly
+                const modeResponse = await fetchMode();
+                console.log('Fetched Mode:', modeResponse);
+
+                // If mode is playlist, fetch the playlist
+                if (modeResponse.data?.name === 'playlist' && modeResponse.data?.playlist_id) {
+                    const playlistResponse = await fetchPlaylistById(modeResponse.data.playlist_id);
+                    console.log('Fetched Playlist:', playlistResponse);
+
+                    if (playlistResponse.success) {
+                        setPlaylist(playlistResponse.data);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching mode or playlist:', error);
+            }
+        };
+
+        // Attempt to fetch mode if WebSocket is not connected
+        if (!isConnected) {
+            fetchCurrentMode();
+        }
+    }, [isConnected]);
+
+    // Time update effect
     useEffect(() => {
         const timer = setInterval(() => {
             setCurrentTime(new Date());
@@ -34,81 +56,45 @@ export default function PreviewPage() {
         return () => clearInterval(timer);
     }, []);
 
-    // Check connection status
+    // Debugging logs
     useEffect(() => {
-        // If no data after 5 seconds, show error
-        const timeout = setTimeout(() => {
-            if (!socketData) {
-                setConnectionError(true);
-            }
-        }, 5000);
+        console.log('Socket Data:', socketData);
+        console.log('Current Mode:', mode);
+        console.log('Is Connected:', isConnected);
+        console.log('Fetched Playlist:', playlist);
+    }, [socketData, mode, isConnected, playlist]);
 
-        // Clear connection error if data arrives
-        if (socketData) {
-            setConnectionError(false);
-        }
-
-        return () => clearTimeout(timeout);
-    }, [socketData]);
-
-    // Auto-reload on prolonged connection failure
-    useEffect(() => {
-        let reloadTimer: NodeJS.Timeout | null = null;
-
-        if (connectionError) {
-            // Reload page after 30 seconds of connection error
-            reloadTimer = setTimeout(() => {
-                window.location.reload();
-            }, 30000);
-        }
-
-        return () => {
-            if (reloadTimer) clearTimeout(reloadTimer);
-        };
-    }, [connectionError]);
-
-    // Standby mode - show blank screen
+    // Standby mode
     if (isStandby) {
-        return (
-            <>
-                <style>{globalStyle}</style>
-                <div style={{ width: '100vw', height: '100vh', backgroundColor: 'black' }}></div>
-            </>
-        );
+        return <div style={{ width: '100vw', height: '100vh', backgroundColor: 'black' }} />;
     }
 
-    // Connection error or loading
-    if (!socketData) {
-        return (
-            <>
-                <style>{globalStyle}</style>
-                <div style={{
-                    width: '100vw',
-                    height: '100vh',
-                    backgroundColor: '#172228',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    color: 'white',
-                    fontFamily: 'sans-serif',
-                    fontSize: '24px'
-                }}>
-                    {connectionError ? 'Connection error. Retrying...' : 'Loading data...'}
-                </div>
-            </>
-        );
-    }
+    // Render based on mode
+    const renderContent = () => {
+        switch (mode?.name) {
+            case 'test':
+                return <TestComponent />;
+            case 'accident':
+                return <AccidentComponent />;
+            case 'information':
+                return <InformationComponent
+                    data={socketData?.data || []}
+                    time={currentTime}
+                />;
+            case 'playlist':
+                return playlist ? (
+                    <PlaylistComponent playlist={playlist} />
+                ) : (
+                    <div>Loading playlist...</div>
+                );
+            default:
+                return <div>No active content</div>;
+        }
+    };
 
-    // Render content based on mode
     return (
-        <>
-            <style>{globalStyle}</style>
-            {socketData.mode?.name === 'test' && <TestComponent />}
-            {socketData.mode?.name === 'accident' && <AccidentComponent />}
-            {socketData.mode?.name === 'information' && <InformationComponent data={socketData.data} time={currentTime} />}
-            {socketData.mode?.name === 'playlist' && socketData.playlist && (
-                <PlaylistComponent playlist={socketData.playlist} />
-            )}
-        </>
+        <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+            {renderContent()}
+        </div>
     );
 }

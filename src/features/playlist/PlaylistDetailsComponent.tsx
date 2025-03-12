@@ -20,7 +20,7 @@ import {
     Typography,
     Tooltip,
 } from '@mui/material';
-import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
+import { DragDropContext, Draggable, Droppable, DropResult } from 'react-beautiful-dnd';
 import Container from '@/components/Container';
 import usePlaylistStore from '@/stores/playlistStore';
 import useSocketDataStore from '@/stores/socketDataStore';
@@ -111,24 +111,24 @@ export default function PlaylistDetailsComponent() {
         }
     };
 
-    const handleDragEnd = async (result: any) => {
+    // Update handleDragEnd method
+    const handleDragEnd = async (result: DropResult) => {
         if (!selectedPlaylist || !result.destination) return;
 
         const items = Array.from(selectedPlaylist.medias);
         const [reorderedItem] = items.splice(result.source.index, 1);
         items.splice(result.destination.index, 0, reorderedItem);
 
-        // Update positions
+        // Recalculate positions
         const updatedItems = items.map((item, index) => ({
             ...item,
-            position: index,
+            position: index
         }));
 
         setLoading(true);
         try {
             const response = await updateMediasInPlaylist(selectedPlaylist.id, updatedItems);
             if (response.success) {
-                // Refresh playlist data
                 const refreshResponse = await fetchPlaylistById(selectedPlaylist.id);
                 if (refreshResponse?.success && refreshResponse?.data) {
                     setSelectedPlaylist(refreshResponse.data);
