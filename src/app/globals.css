@@ -1,42 +1,238 @@
+@font-face {
+  font-family: "stratos-bold";
+  src: local("stratos-bold"),
+  url("/fonts/stratos-bold.otf") format("opentype");
+  font-weight: bold;
+  font-style: normal;
+}
+@font-face {
+  font-family: "stratos-medium";
+  src: local("stratos-medium"),
+  url("/fonts/stratos-medium.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+}
+@font-face {
+  font-family: "stratos-regular";
+  src: local("stratos-regular"),
+  url("/fonts/stratos-regular.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --primary-main: #202020;
+  --secondary-main: #fb6a22;
+  --background-default: #E9E9E9;
+  --text-primary: rgba(0,0,0,0.87);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
+[data-theme='dark'] {
+  --primary-main: #203038;
+  --secondary-main: #2b646f;
+  --background-default: #172228;
+  --text-primary: rgba(255,255,255,0.87);
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+  "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+  sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
+  monospace;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+.gridComponentLittle {
+  justify-content: center;
+  align-items: center;
+  min-height: calc(94vh - 120px);
+  gap: 2px;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+.mainContainer {
+  margin: 3vh;
+  font-family: system-ui !important;
+  padding-bottom: 50px;
+}
+
+.herderTitlePage {
+  display: flex;
+  flex-direction: row !important;
+  justify-content: space-between;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerTitle {
+  padding: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: row;
+  margin-left: 16px;
+}
+
+.headerRight {
+  display: flex;
+  margin-right: 16px;
+}
+
+.headerButton {
+  margin-top: 12px !important;
+  margin-bottom: 12px !important;
+}
+
+.mainPaperPage {
+  border-radius: 14px !important;
+  box-shadow: 0 0 4px 0 var(--divider) !important;
+  height: calc(94vh - 120px);
+}
+
+.containerPage {
+  display: flex;
+  justify-content: center;
+  align-content: center;
+  overflow-y: scroll;
+  padding: 8px;
+  flex-direction: column;
+  justify-content: flex-start;
+  flex: 1;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.containerPage::-webkit-scrollbar {
+  display: none;
+}
+
+.centeredContainer {
+  margin: 1vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-left: 2em;
+  padding-right: 2em;
+  padding-bottom: 1em;
+}
+
+.infoPage {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(94vh - 184px);
+}
+
+.loginContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(94vh - 120px);
+}
+
+/* Preview page styles */
+.accident-container {
+  height: 100%;
+  background-color: rgb(219, 218, 218);
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+}
+
+.logo {
+  width: 100px;
+  height: 100%;
+}
+
+.header-text {
+  font-size: 17px;
+  font-family: "stratos-bold", sans-serif;
+  color: #F1921D;
+}
+
+.info-section {
+  font-family: "stratos-bold", sans-serif;
+  height: 100%;
+  background-color: #000000;
+  padding: 7px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.info-text {
+  line-height: 1.2;
+  font-size: 21px;
+  font-family: "stratos-bold", sans-serif;
+  display: flex;
+  flex-direction: column;
+  color: white;
+  font-weight: bold;
+}
+
+.info-text-light {
+  font-size: 14px;
+  font-family: "stratos-regular", sans-serif;
+}
+
+.info-value {
+  background-color: black;
+  height: 35px;
+  width: 68px;
+  border: 2px solid white;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 28px;
+  font-weight: bold;
+  text-align: right;
+  padding-right: 5px;
+}
+
+.info-value-texte {
+  margin-top: 6px;
+}
+
+.info-value-date {
+  font-size: 32px;
+  font-family: "stratos-bold";
+  padding-top: 15px;
+}
+
+.medias {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
+@media (max-width: 600px) {
+  .headerTitle {
+    max-width: 300px;
+  }
+}
+
+@media (min-width: 601px) and (max-width: 1280px) {
+  .headerTitle {
+    max-width: 440px;
+  }
+}
+
+@media (min-width: 1281px) {
+  .headerTitle {
+    max-width: 680px;
   }
 }
