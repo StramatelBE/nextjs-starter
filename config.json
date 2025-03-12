@@ -1,0 +1,7 @@
+{
+  "previewWidth": "800",
+  "previewHeight": "600",
+  "websocketUrl": "ws://localhost:8080",
+  "apiUrl": "http://localhost:3000/api",
+  "uploadDirectory": "./public/uploads/"
+}

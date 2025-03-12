@@ -22,7 +22,7 @@ import {
 } from '@mui/material';
 import { debounce } from 'lodash';
 import Container from '@/components/Container';
-import useThemeStore from '@/stores/themeStore';
+import { useThemeMode } from '@/components/ThemeRegistry';
 import useSocketDataStore from '@/stores/socketDataStore';
 import useModeStore from '@/stores/modeStore';
 import { updateDate, updateMode, updateSettings } from '@/lib/api';
@@ -35,9 +35,9 @@ interface SettingsComponentProps {
 export default function SettingsComponent({ loading }: SettingsComponentProps) {
     const [changePasswordDialogOpen, setChangePasswordDialogOpen] = useState(false);
     const [updatingMode, setUpdatingMode] = useState(false);
-    const { mode } = useModeStore();
+    const { mode: currentMode } = useModeStore();
     const { socketData } = useSocketDataStore();
-    const { mode: themeMode, toggleTheme } = useThemeStore();
+    const { mode: themeMode, toggleTheme } = useThemeMode();
 
     const settings = socketData?.settings;
 
@@ -99,7 +99,7 @@ export default function SettingsComponent({ loading }: SettingsComponentProps) {
     const handleTestModeToggle = async () => {
         try {
             setUpdatingMode(true);
-            if (mode?.name === 'test') {
+            if (currentMode?.name === 'test') {
                 await updateMode('null', null);
             } else {
                 await updateMode('test', null);
@@ -173,7 +173,7 @@ export default function SettingsComponent({ loading }: SettingsComponentProps) {
                                                         Test panneau
                                                     </Typography>
                                                 </Stack>
-                                                {mode?.name === 'test' ? (
+                                                {currentMode?.name === 'test' ? (
                                                     <IconButton size="small" onClick={handleTestModeToggle} disabled={updatingMode}>
                                                         <StopIcon sx={{ fontSize: 32, color: 'secondary.main' }} />
                                                         {updatingMode && (

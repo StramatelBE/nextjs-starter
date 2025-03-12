@@ -29,11 +29,11 @@ async function fetchApi<T = any>(url: string, options?: RequestInit, retries = 2
         // Parse JSON response with error handling
         try {
             return await response.json();
-        } catch (error) {
+        } catch (error : any) {
             console.error('Error parsing JSON response:', error);
             throw new Error('Invalid response format from server');
         }
-    } catch (error) {
+    } catch (error : any) {
         // Implement retry logic for network errors
         if (retries > 0 && (error instanceof TypeError || error.message.includes('fetch'))) {
             console.warn(`Retrying API call to ${url}, ${retries} attempts left`);
@@ -51,7 +51,7 @@ async function fetchApi<T = any>(url: string, options?: RequestInit, retries = 2
 export async function fetchSettings() {
     try {
         return await fetchApi('/api/settings');
-    } catch (error) {
+    } catch (error : any) {
         console.error('Error fetching settings:', error);
         return { success: false, error: error.message };
     }
@@ -63,7 +63,7 @@ export async function updateSettings(settingId: number, data: any) {
             method: 'PUT',
             body: JSON.stringify(data),
         });
-    } catch (error) {
+    } catch (error : any) {
         console.error('Error updating settings:', error);
         return { success: false, error: error.message };
     }
@@ -75,7 +75,7 @@ export async function updateDate(date: string) {
             method: 'PUT',
             body: JSON.stringify({ date }),
         });
-    } catch (error) {
+    } catch (error : any) {
         console.error('Error updating date:', error);
         return { success: false, error: error.message };
     }
@@ -85,7 +85,7 @@ export async function updateDate(date: string) {
 export async function fetchPlaylists() {
     try {
         return await fetchApi('/api/playlists');
-    } catch (error) {
+    } catch (error : any) {
         console.error('Error fetching playlists:', error);
         return { success: false, error: error.message };
     }
@@ -94,7 +94,7 @@ export async function fetchPlaylists() {
 export async function fetchPlaylistById(id: number) {
     try {
         return await fetchApi(`/api/playlists/${id}`);
-    } catch (error) {
+    } catch (error : any) {
         console.error(`Error fetching playlist ${id}:`, error);
         return { success: false, error: error.message };
     }
@@ -106,7 +106,7 @@ export async function createPlaylist(name: string) {
             method: 'POST',
             body: JSON.stringify({ name }),
         });
-    } catch (error) {
+    } catch (error : any) {
         console.error('Error creating playlist:', error);
         return { success: false, error: error.message };
     }
@@ -118,7 +118,7 @@ export async function updatePlaylist(id: number, name: string) {
             method: 'PUT',
             body: JSON.stringify({ name }),
         });
-    } catch (error) {
+    } catch (error : any) {
         console.error(`Error updating playlist ${id}:`, error);
         return { success: false, error: error.message };
     }
@@ -129,7 +129,7 @@ export async function deletePlaylist(id: number) {
         return await fetchApi(`/api/playlists/${id}`, {
             method: 'DELETE',
         });
-    } catch (error) {
+    } catch (error : any) {
         console.error(`Error deleting playlist ${id}:`, error);
         return { success: false, error: error.message };
     }
@@ -141,7 +141,7 @@ export async function updateMediasInPlaylist(id: number, medias: any[]) {
             method: 'PUT',
             body: JSON.stringify(medias),
         });
-    } catch (error) {
+    } catch (error : any) {
         console.error(`Error updating medias in playlist ${id}:`, error);
         return { success: false, error: error.message };
     }
@@ -154,6 +154,7 @@ export async function uploadMedia(file: File, playlistId: number) {
         formData.append('file', file);
         formData.append('playlistId', playlistId.toString());
 
+        // Use fetch directly for FormData
         const response = await fetch('/api/medias', {
             method: 'POST',
             body: formData,
@@ -161,7 +162,8 @@ export async function uploadMedia(file: File, playlistId: number) {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to upload media');
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to upload media: ${response.status}`);
         }
 
         return await response.json();
@@ -176,7 +178,7 @@ export async function deleteMedia(id: number) {
         return await fetchApi(`/api/medias/${id}`, {
             method: 'DELETE',
         });
-    } catch (error) {
+    } catch (error : any) {
         console.error(`Error deleting media ${id}:`, error);
         return { success: false, error: error.message };
     }
@@ -188,7 +190,7 @@ export async function updateMedia(id: number, data: any) {
             method: 'PUT',
             body: JSON.stringify(data),
         });
-    } catch (error) {
+    } catch (error : any) {
         console.error(`Error updating media ${id}:`, error);
         return { success: false, error: error.message };
     }
@@ -200,7 +202,7 @@ export async function addData(type: string, playlistId: number) {
             method: 'POST',
             body: JSON.stringify({ type, playlistId }),
         });
-    } catch (error) {
+    } catch (error : any) {
         console.error('Error adding data to playlist:', error);
         return { success: false, error: error.message };
     }
@@ -210,7 +212,7 @@ export async function addData(type: string, playlistId: number) {
 export async function fetchMode() {
     try {
         return await fetchApi('/api/modes/1');
-    } catch (error) {
+    } catch (error : any) {
         console.error('Error fetching mode:', error);
         return { success: false, error: error.message };
     }
@@ -222,7 +224,7 @@ export async function updateMode(name: string, playlistId: number | null) {
             method: 'PUT',
             body: JSON.stringify({ name, playlist_id: playlistId }),
         });
-    } catch (error) {
+    } catch (error : any) {
         console.error('Error updating mode:', error);
         return { success: false, error: error.message };
     }
@@ -232,7 +234,7 @@ export async function updateMode(name: string, playlistId: number | null) {
 export async function fetchData() {
     try {
         return await fetchApi('/api/data');
-    } catch (error) {
+    } catch (error : any) {
         console.error('Error fetching data:', error);
         return { success: false, error: error.message };
     }
@@ -244,7 +246,7 @@ export async function updateDataById(id: number, value: string) {
             method: 'PUT',
             body: JSON.stringify({ value }),
         });
-    } catch (error) {
+    } catch (error : any) {
         console.error(`Error updating data ${id}:`, error);
         return { success: false, error: error.message };
     }
@@ -254,7 +256,7 @@ export async function updateDataById(id: number, value: string) {
 export async function fetchAccident() {
     try {
         return await fetchApi('/api/accidents');
-    } catch (error) {
+    } catch (error : any) {
         console.error('Error fetching accidents:', error);
         return { success: false, error: error.message };
     }
@@ -266,7 +268,7 @@ export async function updateAccident(id: number, data: any) {
             method: 'PUT',
             body: JSON.stringify(data),
         });
-    } catch (error) {
+    } catch (error : any) {
         console.error(`Error updating accident ${id}:`, error);
         return { success: false, error: error.message };
     }
@@ -279,7 +281,7 @@ export async function changePassword(oldPassword: string, newPassword: string) {
             method: 'POST',
             body: JSON.stringify({ oldPassword, newPassword }),
         });
-    } catch (error) {
+    } catch (error : any) {
         console.error('Error changing password:', error);
         return { success: false, error: error.message };
     }
@@ -289,7 +291,7 @@ export async function changePassword(oldPassword: string, newPassword: string) {
 export async function fetchConfig() {
     try {
         return await fetchApi('/api/config');
-    } catch (error) {
+    } catch (error : any) {
         console.error('Error fetching config:', error);
         return { success: false, error: error.message };
     }
@@ -301,7 +303,7 @@ export async function updateConfig(configData: any) {
             method: 'PUT',
             body: JSON.stringify(configData),
         });
-    } catch (error) {
+    } catch (error : any) {
         console.error('Error updating config:', error);
         return { success: false, error: error.message };
     }

@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ThemeOptions, createTheme } from '@mui/material/styles';
+import { createTheme, ThemeOptions } from '@mui/material/styles';
 
+// Create proper themes with breakpoints
 const lightTheme = createTheme({
     palette: {
         primary: {
@@ -23,6 +24,16 @@ const lightTheme = createTheme({
         divider: '#E9E9E9',
         error: {
             main: '#EC1C0C',
+        },
+    },
+    // Include breakpoints for proper responsive functionality
+    breakpoints: {
+        values: {
+            xs: 0,
+            sm: 600,
+            md: 900,
+            lg: 1200,
+            xl: 1536,
         },
     },
 });
@@ -48,6 +59,16 @@ const darkTheme = createTheme({
         divider: "#172228",
         error: {
             main: '#EC1C0C',
+        },
+    },
+    // Include breakpoints for proper responsive functionality
+    breakpoints: {
+        values: {
+            xs: 0,
+            sm: 600,
+            md: 900,
+            lg: 1200,
+            xl: 1536,
         },
     },
 });

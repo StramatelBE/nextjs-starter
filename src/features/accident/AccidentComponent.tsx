@@ -24,9 +24,18 @@ export default function AccidentComponent() {
         accidents_this_year: 0
     });
 
-    // Sync accident data from WebSocket when it changes
+    // Initialize local values from accident or socket data
     useEffect(() => {
-        if (socketData?.accident) {
+        // First try to use the accident from the store (persisted)
+        if (accident) {
+            setLocalValues({
+                days_without_accident: accident.days_without_accident,
+                record_days_without_accident: accident.record_days_without_accident,
+                accidents_this_year: accident.accidents_this_year
+            });
+        }
+        // Then try to use socket data if available (updates in real-time)
+        else if (socketData?.accident) {
             setAccident(socketData.accident);
             setLocalValues({
                 days_without_accident: socketData.accident.days_without_accident,
@@ -34,7 +43,28 @@ export default function AccidentComponent() {
                 accidents_this_year: socketData.accident.accidents_this_year
             });
         }
-    }, [socketData?.accident, setAccident]);
+    }, [accident, socketData?.accident, setAccident]);
+
+    // Sync with socket data when it changes but keep local edits
+    useEffect(() => {
+        if (socketData?.accident &&
+            socketData.accident.last_updated &&
+            accident?.last_updated) {
+
+            // Only update if the server data is newer
+            const serverDate = new Date(socketData.accident.last_updated);
+            const localDate = new Date(accident.last_updated);
+
+            if (serverDate > localDate) {
+                setAccident(socketData.accident);
+                setLocalValues({
+                    days_without_accident: socketData.accident.days_without_accident,
+                    record_days_without_accident: socketData.accident.record_days_without_accident,
+                    accidents_this_year: socketData.accident.accidents_this_year
+                });
+            }
+        }
+    }, [socketData?.accident, accident, setAccident]);
 
     // Check if reset is needed when accident data changes
     useEffect(() => {
@@ -108,6 +138,9 @@ export default function AccidentComponent() {
                 days_without_accident: 0
             }));
         }
+
+        // Update with last_updated timestamp
+        updatedAccident.last_updated = new Date();
 
         const response = await updateAccident(accident.id, updatedAccident);
         if (response.success) {
