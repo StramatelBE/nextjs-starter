@@ -34,15 +34,34 @@ interface SettingsComponentProps {
 
 export default function SettingsComponent({ loading }: SettingsComponentProps) {
     const [changePasswordDialogOpen, setChangePasswordDialogOpen] = useState(false);
+    const [updatingMode, setUpdatingMode] = useState(false);
     const { mode } = useModeStore();
     const { socketData } = useSocketDataStore();
     const { mode: themeMode, toggleTheme } = useThemeStore();
 
     const settings = socketData?.settings;
 
-    // Parse standby time ranges
-    const standbyStart = settings ? parseInt(settings.standby_start_time.split(':')[0]) : 22;
-    const standbyEnd = settings ? parseInt(settings.standby_end_time.split(':')[0]) : 6;
+    // Safe parsing of standby time ranges
+    const getStandbyStart = () => {
+        if (!settings || !settings.standby_start_time) return 22;
+        try {
+            return parseInt(settings.standby_start_time.split(':')[0]) || 22;
+        } catch (e) {
+            return 22;
+        }
+    };
+
+    const getStandbyEnd = () => {
+        if (!settings || !settings.standby_end_time) return 6;
+        try {
+            return parseInt(settings.standby_end_time.split(':')[0]) || 6;
+        } catch (e) {
+            return 6;
+        }
+    };
+
+    const standbyStart = getStandbyStart();
+    const standbyEnd = getStandbyEnd();
 
     const handleSliderChange = (event: Event, newValue: number | number[]) => {
         if (!settings || !Array.isArray(newValue)) return;
@@ -79,6 +98,7 @@ export default function SettingsComponent({ loading }: SettingsComponentProps) {
 
     const handleTestModeToggle = async () => {
         try {
+            setUpdatingMode(true);
             if (mode?.name === 'test') {
                 await updateMode('null', null);
             } else {
@@ -86,6 +106,8 @@ export default function SettingsComponent({ loading }: SettingsComponentProps) {
             }
         } catch (error) {
             console.error('Failed to toggle test mode:', error);
+        } finally {
+            setUpdatingMode(false);
         }
     };
 
@@ -152,21 +174,34 @@ export default function SettingsComponent({ loading }: SettingsComponentProps) {
                                                     </Typography>
                                                 </Stack>
                                                 {mode?.name === 'test' ? (
-                                                    <IconButton size="small" onClick={handleTestModeToggle}>
+                                                    <IconButton size="small" onClick={handleTestModeToggle} disabled={updatingMode}>
                                                         <StopIcon sx={{ fontSize: 32, color: 'secondary.main' }} />
-                                                        <CircularProgress
-                                                            size={32}
-                                                            sx={{
-                                                                top: 5,
-                                                                left: 5,
-                                                                position: 'absolute',
-                                                                color: 'secondary.main',
-                                                            }}
-                                                        />
+                                                        {updatingMode && (
+                                                            <CircularProgress
+                                                                size={32}
+                                                                sx={{
+                                                                    top: 5,
+                                                                    left: 5,
+                                                                    position: 'absolute',
+                                                                    color: 'secondary.main',
+                                                                }}
+                                                            />
+                                                        )}
                                                     </IconButton>
                                                 ) : (
-                                                    <IconButton size="small" onClick={handleTestModeToggle}>
+                                                    <IconButton size="small" onClick={handleTestModeToggle} disabled={updatingMode}>
                                                         <PlayArrowIcon sx={{ fontSize: 32, color: 'secondary.main' }} />
+                                                        {updatingMode && (
+                                                            <CircularProgress
+                                                                size={32}
+                                                                sx={{
+                                                                    top: 5,
+                                                                    left: 5,
+                                                                    position: 'absolute',
+                                                                    color: 'secondary.main',
+                                                                }}
+                                                            />
+                                                        )}
                                                     </IconButton>
                                                 )}
                                             </Stack>

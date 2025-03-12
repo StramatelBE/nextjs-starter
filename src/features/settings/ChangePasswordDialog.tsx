@@ -1,267 +1,171 @@
 'use client';
 
 import { useState } from 'react';
-import BugReportIcon from '@mui/icons-material/BugReport';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
-import DateRangeIcon from '@mui/icons-material/DateRange';
-import LockIcon from '@mui/icons-material/Lock';
-import ModeNightIcon from '@mui/icons-material/ModeNight';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import SettingsIcon from '@mui/icons-material/Settings';
-import StopIcon from '@mui/icons-material/Stop';
 import {
     Button,
-    CircularProgress,
-    Grid,
-    IconButton,
-    Skeleton,
-    Slider,
-    Stack,
-    Switch,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    TextField,
+    FormControl,
     Typography,
+    Box,
+    CircularProgress,
 } from '@mui/material';
-import { debounce } from 'lodash';
-import Container from '@/components/Container';
-import useThemeStore from '@/stores/themeStore';
-import useSocketDataStore from '@/stores/socketDataStore';
-import useModeStore from '@/stores/modeStore';
-import { updateDate, updateMode, updateSettings } from '@/lib/api';
-import ChangePasswordDialog from './ChangePasswordDialog';
+import { changePassword } from '@/lib/api';
 
-interface SettingsComponentProps {
-    loading: boolean;
+interface ChangePasswordDialogProps {
+    open: boolean;
+    onClose: () => void;
 }
 
-export default function SettingsComponent({ loading }: SettingsComponentProps) {
-    const [changePasswordDialogOpen, setChangePasswordDialogOpen] = useState(false);
-    const { mode } = useModeStore();
-    const { socketData } = useSocketDataStore();
-    const { mode: themeMode, toggleTheme } = useThemeStore();
+export default function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProps) {
+    const [oldPassword, setOldPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [loading, setLoading] = useState(false);
 
-    const settings = socketData?.settings;
-
-    // Parse standby time ranges
-    const standbyStart = settings ? parseInt(settings.standby_start_time.split(':')[0]) : 22;
-    const standbyEnd = settings ? parseInt(settings.standby_end_time.split(':')[0]) : 6;
-
-    const handleSliderChange = (event: Event, newValue: number | number[]) => {
-        if (!settings || !Array.isArray(newValue)) return;
-
-        const updatedSettings = {
-            ...settings,
-            standby_start_time: `${newValue[0]}:00`,
-            standby_end_time: `${newValue[1]}:00`,
-        };
-
-        updateSettings(settings.id, updatedSettings);
+    const handleReset = () => {
+        setOldPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setError('');
+        setSuccess('');
+        setLoading(false);
     };
 
-    const debouncedSliderChange = debounce(handleSliderChange, 300);
-
-    const handleStandbyToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (!settings) return;
-
-        const updatedSettings = {
-            ...settings,
-            standby: event.target.checked,
-        };
-
-        updateSettings(settings.id, updatedSettings);
+    const handleClose = () => {
+        handleReset();
+        onClose();
     };
 
-    const handleDateSync = async () => {
-        try {
-            await updateDate(new Date().toISOString());
-        } catch (error) {
-            console.error('Failed to sync date:', error);
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+
+        // Validate inputs
+        if (!oldPassword || !newPassword || !confirmPassword) {
+            setError('Tous les champs sont obligatoires');
+            return;
         }
-    };
 
-    const handleTestModeToggle = async () => {
+        if (newPassword.length < 9) {
+            setError('Le nouveau mot de passe doit contenir au moins 9 caractères');
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            setError('Les nouveaux mots de passe ne correspondent pas');
+            return;
+        }
+
+        setLoading(true);
+
         try {
-            if (mode?.name === 'test') {
-                await updateMode('null', null);
+            const response = await changePassword(oldPassword, newPassword);
+
+            if (response.success) {
+                setSuccess('Mot de passe modifié avec succès');
+                // Reset fields on success but keep dialog open to show the success message
+                setOldPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
+
+                // Close dialog after a short delay
+                setTimeout(() => {
+                    handleClose();
+                }, 2000);
             } else {
-                await updateMode('test', null);
+                setError(response.error || 'Échec de la modification du mot de passe');
             }
-        } catch (error) {
-            console.error('Failed to toggle test mode:', error);
+        } catch (error: any) {
+            setError(error.message || 'Une erreur s\'est produite');
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
-        <>
-            <Grid container spacing={0}>
-                <Grid item xs={12} sm={12}>
-                    <Container
-                        icon={<SettingsIcon sx={{ color: 'primary.light' }} />}
-                        title="Settings"
-                        content={
-                            loading ? (
-                                <>
-                                    {[...Array(3)].map((_, index) => (
-                                        <Skeleton
-                                            key={index}
-                                            variant="rectangular"
-                                            style={{
-                                                height: '50px',
-                                                width: '95%',
-                                                marginLeft: '2.5%',
-                                                marginRight: '2.5%',
-                                                marginBottom: index === 2 ? '0' : '10px',
-                                                borderRadius: '10px',
-                                            }}
-                                        />
-                                    ))}
-                                </>
-                            ) : (
-                                <Grid container>
-                                    <Grid item xs={12} sm={12}>
-                                        <Stack pl={8} pr={8} spacing={3}>
-                                            <Stack
-                                                direction="row"
-                                                justifyContent="space-between"
-                                                alignItems="center"
-                                            >
-                                                <Stack spacing={3} direction="row" alignItems="center">
-                                                    <IconButton disabled>
-                                                        <DarkModeIcon sx={{ color: 'text.secondary' }} />
-                                                    </IconButton>
-                                                    <Typography variant="body1" sx={{ color: 'text.primary' }}>
-                                                        Dark mode
-                                                    </Typography>
-                                                </Stack>
-                                                <Switch
-                                                    checked={themeMode === 'dark'}
-                                                    onChange={toggleTheme}
-                                                    color="secondary"
-                                                />
-                                            </Stack>
+        <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+            <DialogTitle>Changer le mot de passe</DialogTitle>
+            <form onSubmit={handleSubmit}>
+                <DialogContent>
+                    <FormControl fullWidth>
+                        <TextField
+                            margin="normal"
+                            label="Mot de passe actuel"
+                            type="password"
+                            fullWidth
+                            value={oldPassword}
+                            onChange={(e) => setOldPassword(e.target.value)}
+                            disabled={loading}
+                            autoComplete="current-password"
+                        />
+                        <TextField
+                            margin="normal"
+                            label="Nouveau mot de passe"
+                            type="password"
+                            fullWidth
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            disabled={loading}
+                            autoComplete="new-password"
+                        />
+                        <TextField
+                            margin="normal"
+                            label="Confirmer le nouveau mot de passe"
+                            type="password"
+                            fullWidth
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            disabled={loading}
+                            autoComplete="new-password"
+                        />
 
-                                            <Stack
-                                                direction="row"
-                                                justifyContent="space-between"
-                                                alignItems="center"
-                                            >
-                                                <Stack direction="row" alignItems="center" spacing={3}>
-                                                    <IconButton disabled>
-                                                        <BugReportIcon sx={{ color: 'text.secondary' }} />
-                                                    </IconButton>
-                                                    <Typography variant="body1" sx={{ color: 'text.primary' }}>
-                                                        Test panneau
-                                                    </Typography>
-                                                </Stack>
-                                                {mode?.name === 'test' ? (
-                                                    <IconButton size="small" onClick={handleTestModeToggle}>
-                                                        <StopIcon sx={{ fontSize: 32, color: 'secondary.main' }} />
-                                                        <CircularProgress
-                                                            size={32}
-                                                            sx={{
-                                                                top: 5,
-                                                                left: 5,
-                                                                position: 'absolute',
-                                                                color: 'secondary.main',
-                                                            }}
-                                                        />
-                                                    </IconButton>
-                                                ) : (
-                                                    <IconButton size="small" onClick={handleTestModeToggle}>
-                                                        <PlayArrowIcon sx={{ fontSize: 32, color: 'secondary.main' }} />
-                                                    </IconButton>
-                                                )}
-                                            </Stack>
+                        {error && (
+                            <Typography color="error" variant="body2" sx={{ mt: 2 }}>
+                                {error}
+                            </Typography>
+                        )}
 
-                                            <Stack
-                                                onClick={handleDateSync}
-                                                direction="row"
-                                                alignItems="center"
-                                                spacing={3}
-                                            >
-                                                <IconButton>
-                                                    <DateRangeIcon sx={{ color: 'text.secondary' }} />
-                                                </IconButton>
-                                                <Typography variant="body1" sx={{ color: 'text.primary' }}>
-                                                    Synchroniser la Date
-                                                </Typography>
-                                            </Stack>
-
-                                            <Stack
-                                                onClick={() => setChangePasswordDialogOpen(true)}
-                                                direction="row"
-                                                alignItems="center"
-                                                spacing={3}
-                                            >
-                                                <IconButton>
-                                                    <LockIcon sx={{ color: 'text.secondary' }} />
-                                                </IconButton>
-                                                <Button
-                                                    variant="text"
-                                                    size="large"
-                                                    sx={{
-                                                        margin: '24px',
-                                                        color: 'text.primary',
-                                                        textTransform: 'none',
-                                                        padding: '0',
-                                                    }}
-                                                >
-                                                    Changer le mot de passe
-                                                </Button>
-                                            </Stack>
-
-                                            {settings && (
-                                                <>
-                                                    <Stack
-                                                        direction="row"
-                                                        justifyContent="space-between"
-                                                        alignItems="center"
-                                                        spacing={3}
-                                                    >
-                                                        <Stack spacing={3} direction="row" alignItems="center">
-                                                            <IconButton disabled>
-                                                                <ModeNightIcon sx={{ color: 'text.secondary' }} />
-                                                            </IconButton>
-                                                            <Typography variant="body1">Veille</Typography>
-                                                        </Stack>
-                                                        <Switch
-                                                            color="secondary"
-                                                            checked={settings.standby}
-                                                            onChange={handleStandbyToggle}
-                                                        />
-                                                    </Stack>
-
-                                                    <Stack style={{ marginLeft: '5%', marginRight: '5%' }}>
-                                                        <Slider
-                                                            color="secondary"
-                                                            value={[standbyStart, standbyEnd]}
-                                                            min={0}
-                                                            max={24}
-                                                            step={1}
-                                                            marks={[
-                                                                { value: 0, label: '0h' },
-                                                                { value: 6, label: '6h' },
-                                                                { value: 12, label: '12h' },
-                                                                { value: 18, label: '18h' },
-                                                                { value: 24, label: '24h' },
-                                                            ]}
-                                                            valueLabelDisplay="auto"
-                                                            onChange={(e, val) => debouncedSliderChange(e, val)}
-                                                            disabled={!settings.standby}
-                                                        />
-                                                    </Stack>
-                                                </>
-                                            )}
-                                        </Stack>
-                                    </Grid>
-                                </Grid>
-                            )
-                        }
-                    />
-                </Grid>
-            </Grid>
-            <ChangePasswordDialog
-                open={changePasswordDialogOpen}
-                onClose={() => setChangePasswordDialogOpen(false)}
-            />
-        </>
+                        {success && (
+                            <Typography color="success.main" variant="body2" sx={{ mt: 2 }}>
+                                {success}
+                            </Typography>
+                        )}
+                    </FormControl>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleClose} color="inherit" disabled={loading}>
+                        Annuler
+                    </Button>
+                    <Box sx={{ position: 'relative' }}>
+                        <Button
+                            type="submit"
+                            color="primary"
+                            disabled={loading || !oldPassword || !newPassword || !confirmPassword}
+                        >
+                            Confirmer
+                        </Button>
+                        {loading && (
+                            <CircularProgress
+                                size={24}
+                                sx={{
+                                    position: 'absolute',
+                                    top: '50%',
+                                    left: '50%',
+                                    marginTop: '-12px',
+                                    marginLeft: '-12px',
+                                }}
+                            />
+                        )}
+                    </Box>
+                </DialogActions>
+            </form>
+        </Dialog>
     );
 }

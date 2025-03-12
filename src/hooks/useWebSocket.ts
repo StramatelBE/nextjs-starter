@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 
 type WebSocketMessageHandler = (event: MessageEvent) => void;
 
@@ -28,7 +28,7 @@ const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn => {
         onClose,
         onError,
         reconnectInterval = 5000,
-        reconnectAttempts = Infinity,
+        reconnectAttempts = 5, // Limit reconnect attempts to prevent excessive connections
         autoConnect = true,
     } = options;
 
@@ -38,16 +38,39 @@ const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn => {
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const reconnectAttemptsRef = useRef<number>(0);
+    const hasBeenConnectedRef = useRef<boolean>(false);
 
-    const clearReconnectInterval = () => {
+    const clearReconnectInterval = useCallback(() => {
         if (reconnectIntervalRef.current) {
             clearInterval(reconnectIntervalRef.current);
             reconnectIntervalRef.current = null;
         }
-    };
+    }, []);
 
-    const connect = () => {
-        if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    const disconnect = useCallback(() => {
+        clearReconnectInterval();
+
+        if (wsRef.current) {
+            // Remove all event listeners to prevent memory leaks
+            wsRef.current.onopen = null;
+            wsRef.current.onmessage = null;
+            wsRef.current.onerror = null;
+            wsRef.current.onclose = null;
+
+            if (wsRef.current.readyState === WebSocket.OPEN ||
+                wsRef.current.readyState === WebSocket.CONNECTING) {
+                wsRef.current.close();
+            }
+            wsRef.current = null;
+        }
+
+        setIsConnected(false);
+        setIsConnecting(false);
+    }, [clearReconnectInterval]);
+
+    const connect = useCallback(() => {
+        // Ensure cleanup of previous connection before creating a new one
+        disconnect();
 
         try {
             setIsConnecting(true);
@@ -57,6 +80,7 @@ const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn => {
                 setIsConnected(true);
                 setIsConnecting(false);
                 reconnectAttemptsRef.current = 0;
+                hasBeenConnectedRef.current = true;
                 clearReconnectInterval();
                 if (onOpen) onOpen(event);
             };
@@ -74,18 +98,19 @@ const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn => {
                 setIsConnecting(false);
                 if (onClose) onClose(event);
 
-                if (reconnectAttemptsRef.current < reconnectAttempts) {
+                // Only attempt reconnection if:
+                // 1. We haven't exceeded max attempts
+                // 2. We're not manually disconnecting
+                // 3. We've been connected before (to avoid immediate connect/disconnect cycles)
+                if (reconnectAttemptsRef.current < reconnectAttempts &&
+                    wsRef.current && // If wsRef.current is null, we're manually disconnecting
+                    hasBeenConnectedRef.current) {
+
                     clearReconnectInterval();
                     reconnectIntervalRef.current = setInterval(() => {
-                        if (
-                            !wsRef.current ||
-                            wsRef.current.readyState === WebSocket.CLOSED
-                        ) {
-                            reconnectAttemptsRef.current += 1;
-                            connect();
-                        } else {
-                            clearReconnectInterval();
-                        }
+                        reconnectAttemptsRef.current += 1;
+                        connect();
+                        clearReconnectInterval(); // Clear after attempting to reconnect
                     }, reconnectInterval);
                 }
             };
@@ -93,30 +118,19 @@ const useWebSocket = (options: UseWebSocketOptions): UseWebSocketReturn => {
             console.error("WebSocket connection error:", error);
             setIsConnecting(false);
         }
-    };
+    }, [url, onMessage, onOpen, onClose, onError, reconnectInterval, reconnectAttempts, clearReconnectInterval, disconnect]);
 
-    const disconnect = () => {
-        clearReconnectInterval();
-
-        if (wsRef.current) {
-            wsRef.current.onclose = null; // Prevent the reconnection logic
-            wsRef.current.close();
-            wsRef.current = null;
-        }
-
-        setIsConnected(false);
-        setIsConnecting(false);
-    };
-
+    // Connect when the component mounts
     useEffect(() => {
         if (autoConnect) {
             connect();
         }
 
+        // Clean up on unmount
         return () => {
             disconnect();
         };
-    }, [url]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [url, autoConnect, connect, disconnect]);
 
     return {
         connect,

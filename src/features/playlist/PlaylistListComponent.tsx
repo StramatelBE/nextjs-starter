@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ListIcon from '@mui/icons-material/List';
@@ -18,18 +18,48 @@ import {
 import Container from '@/components/Container';
 import usePlaylistStore from '@/stores/playlistStore';
 import useModeStore from '@/stores/modeStore';
+import useSocketDataStore from '@/stores/socketDataStore';
 import { createPlaylist, deletePlaylist, fetchPlaylistById, updateMode } from '@/lib/api';
 import AddPlaylistDialog from './AddPlaylistDialog';
 
 export default function PlaylistListComponent() {
     const [addDialogOpen, setAddDialogOpen] = useState(false);
     const [loading, setLoading] = useState(false);
-    const { playlists, setSelectedPlaylist } = usePlaylistStore();
-    const { mode } = useModeStore();
+    const [activePlaylistId, setActivePlaylistId] = useState<number | null>(null);
+    const { playlists, setSelectedPlaylist, setPlaylists } = usePlaylistStore();
+    const { mode, setMode } = useModeStore();
+    const { socketData } = useSocketDataStore();
+
+    // Update activePlaylistId when socketData changes
+    useEffect(() => {
+        if (socketData?.mode?.name === 'playlist' && socketData.mode.playlist_id) {
+            setActivePlaylistId(socketData.mode.playlist_id);
+        } else {
+            setActivePlaylistId(null);
+        }
+    }, [socketData]);
+
+    // Update playlists when socketData changes
+    useEffect(() => {
+        if (socketData?.playlist) {
+            // Update the local playlists with the data from socketData
+            const updatedPlaylists = playlists?.map(p =>
+                p.id === socketData.playlist.id ? {...p, ...socketData.playlist} : p
+            );
+            if (updatedPlaylists && JSON.stringify(updatedPlaylists) !== JSON.stringify(playlists)) {
+                setPlaylists(updatedPlaylists);
+            }
+        }
+    }, [socketData, playlists, setPlaylists]);
 
     const handleDeletePlaylist = async (id: number) => {
         try {
-            await deletePlaylist(id);
+            const response = await deletePlaylist(id);
+            if (response.success) {
+                // Remove the playlist from the local state
+                const updatedPlaylists = playlists?.filter(p => p.id !== id) || [];
+                setPlaylists(updatedPlaylists);
+            }
         } catch (error) {
             console.error('Failed to delete playlist:', error);
         }
@@ -38,7 +68,7 @@ export default function PlaylistListComponent() {
     const handleSelectPlaylist = async (id: number) => {
         try {
             const response = await fetchPlaylistById(id);
-            if (response?.data) {
+            if (response?.success && response?.data) {
                 setSelectedPlaylist(response.data);
             }
         } catch (error) {
@@ -49,20 +79,33 @@ export default function PlaylistListComponent() {
     const handleTogglePlaylist = async (id: number) => {
         setLoading(true);
         try {
-            if (mode?.name === 'playlist' && mode.playlist_id === id) {
-                await updateMode('null', null);
+            if (activePlaylistId === id) {
+                const response = await updateMode('null', null);
+                if (response.success) {
+                    setMode(response.data);
+                    setActivePlaylistId(null);
+                }
             } else {
-                await updateMode('playlist', id);
+                const response = await updateMode('playlist', id);
+                if (response.success) {
+                    setMode(response.data);
+                    setActivePlaylistId(id);
+                }
             }
         } catch (error) {
             console.error('Failed to update mode:', error);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleAddPlaylist = async (name: string) => {
         try {
-            await createPlaylist(name);
+            const response = await createPlaylist(name);
+            if (response.success && response.data) {
+                // Add the new playlist to the local state
+                setPlaylists([...(playlists || []), response.data]);
+            }
             setAddDialogOpen(false);
         } catch (error) {
             console.error('Failed to create playlist:', error);
@@ -98,18 +141,20 @@ export default function PlaylistListComponent() {
                                                     onClick={() => handleTogglePlaylist(playlist.id)}
                                                     disabled={loading}
                                                 >
-                                                    {mode?.name === 'playlist' && mode.playlist_id === playlist.id ? (
+                                                    {activePlaylistId === playlist.id ? (
                                                         <>
                                                             <StopIcon sx={{ fontSize: 15, color: 'secondary.main' }} />
-                                                            <CircularProgress
-                                                                size={15}
-                                                                sx={{
-                                                                    top: 5,
-                                                                    left: 5,
-                                                                    position: 'absolute',
-                                                                    color: 'secondary.main',
-                                                                }}
-                                                            />
+                                                            {loading && (
+                                                                <CircularProgress
+                                                                    size={15}
+                                                                    sx={{
+                                                                        top: 5,
+                                                                        left: 5,
+                                                                        position: 'absolute',
+                                                                        color: 'secondary.main',
+                                                                    }}
+                                                                />
+                                                            )}
                                                         </>
                                                     ) : (
                                                         <PlayArrowIcon sx={{ fontSize: 15, color: 'secondary.main' }} />

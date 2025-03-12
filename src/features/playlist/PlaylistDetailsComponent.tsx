@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import ClearIcon from '@mui/icons-material/Clear';
 import DragHandleIcon from '@mui/icons-material/DragHandle';
@@ -9,6 +9,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditCalendarIcon from '@mui/icons-material/EditCalendar';
 import {
     Box,
+    CircularProgress,
     IconButton,
     Menu,
     MenuItem,
@@ -23,35 +24,62 @@ import {
 import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
 import Container from '@/components/Container';
 import usePlaylistStore from '@/stores/playlistStore';
+import useSocketDataStore from '@/stores/socketDataStore';
 import { deleteMedia, updateMedia, uploadMedia, addData, updateMediasInPlaylist, fetchPlaylistById, updatePlaylist } from '@/lib/api';
 import UpdatePlaylistDialog from './UpdatePlaylistDialog';
 
 export default function PlaylistDetailsComponent() {
     const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
     const [mediaMenu, setMediaMenu] = useState<null | HTMLElement>(null);
-    const { selectedPlaylist, clearSelectedPlaylist } = usePlaylistStore();
+    const [loading, setLoading] = useState(false);
+    const { selectedPlaylist, clearSelectedPlaylist, setSelectedPlaylist } = usePlaylistStore();
+    const { socketData } = useSocketDataStore();
+
+    // Update selected playlist when socket data changes
+    useEffect(() => {
+        if (socketData?.playlist && selectedPlaylist && socketData.playlist.id === selectedPlaylist.id) {
+            setSelectedPlaylist(socketData.playlist);
+        }
+    }, [socketData?.playlist, selectedPlaylist, setSelectedPlaylist]);
 
     const handleUpdatePlaylist = async (name: string) => {
         if (!selectedPlaylist) return;
+
+        setLoading(true);
         try {
-            await updatePlaylist(selectedPlaylist.id, name);
+            const response = await updatePlaylist(selectedPlaylist.id, name);
+            if (response.success) {
+                // Refresh playlist data
+                const refreshResponse = await fetchPlaylistById(selectedPlaylist.id);
+                if (refreshResponse?.success && refreshResponse?.data) {
+                    setSelectedPlaylist(refreshResponse.data);
+                }
+            }
             setUpdateDialogOpen(false);
         } catch (error) {
             console.error('Failed to update playlist:', error);
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleDeleteMedia = async (mediaId: number) => {
         if (!selectedPlaylist) return;
+
+        setLoading(true);
         try {
-            await deleteMedia(mediaId);
-            // Refresh playlist data
-            const response = await fetchPlaylistById(selectedPlaylist.id);
-            if (response?.data) {
-                setSelectedPlaylist(response.data);
+            const response = await deleteMedia(mediaId);
+            if (response.success) {
+                // Refresh playlist data
+                const refreshResponse = await fetchPlaylistById(selectedPlaylist.id);
+                if (refreshResponse?.success && refreshResponse?.data) {
+                    setSelectedPlaylist(refreshResponse.data);
+                }
             }
         } catch (error) {
             console.error('Failed to delete media:', error);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -63,10 +91,20 @@ export default function PlaylistDetailsComponent() {
 
         if (!media) return;
 
+        setLoading(true);
         try {
-            await updateMedia(mediaId, { ...media, duration });
+            const response = await updateMedia(mediaId, { ...media, duration });
+            if (response.success) {
+                // Refresh playlist data
+                const refreshResponse = await fetchPlaylistById(selectedPlaylist.id);
+                if (refreshResponse?.success && refreshResponse?.data) {
+                    setSelectedPlaylist(refreshResponse.data);
+                }
+            }
         } catch (error) {
             console.error('Failed to update media duration:', error);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -83,52 +121,71 @@ export default function PlaylistDetailsComponent() {
             position: index,
         }));
 
+        setLoading(true);
         try {
-            await updateMediasInPlaylist(selectedPlaylist.id, updatedItems);
+            const response = await updateMediasInPlaylist(selectedPlaylist.id, updatedItems);
+            if (response.success) {
+                // Refresh playlist data
+                const refreshResponse = await fetchPlaylistById(selectedPlaylist.id);
+                if (refreshResponse?.success && refreshResponse?.data) {
+                    setSelectedPlaylist(refreshResponse.data);
+                }
+            }
         } catch (error) {
             console.error('Failed to update media positions:', error);
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleUploadMedia = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!selectedPlaylist || !e.target.files || e.target.files.length === 0) return;
 
+        setLoading(true);
         try {
-            await uploadMedia(e.target.files[0], selectedPlaylist.id);
-            // Refresh playlist data
-            const response = await fetchPlaylistById(selectedPlaylist.id);
-            if (response?.data) {
-                setSelectedPlaylist(response.data);
+            const response = await uploadMedia(e.target.files[0], selectedPlaylist.id);
+            if (response.success) {
+                // Refresh playlist data
+                const refreshResponse = await fetchPlaylistById(selectedPlaylist.id);
+                if (refreshResponse?.success && refreshResponse?.data) {
+                    setSelectedPlaylist(refreshResponse.data);
+                }
             }
         } catch (error) {
             console.error('Failed to upload media:', error);
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleAddData = async (type: string) => {
         if (!selectedPlaylist) return;
 
+        setLoading(true);
         try {
-            await addData(type, selectedPlaylist.id);
-            // Refresh playlist data
-            const response = await fetchPlaylistById(selectedPlaylist.id);
-            if (response?.data) {
-                setSelectedPlaylist(response.data);
+            const response = await addData(type, selectedPlaylist.id);
+            if (response.success) {
+                // Refresh playlist data
+                const refreshResponse = await fetchPlaylistById(selectedPlaylist.id);
+                if (refreshResponse?.success && refreshResponse?.data) {
+                    setSelectedPlaylist(refreshResponse.data);
+                }
             }
         } catch (error) {
             console.error('Failed to add data media:', error);
+        } finally {
+            setLoading(false);
+            setMediaMenu(null);
         }
-
-        setMediaMenu(null);
     };
 
     if (!selectedPlaylist) {
         return null;
     }
 
-    const sortedMedias = selectedPlaylist.medias.sort(
+    const sortedMedias = selectedPlaylist.medias?.sort(
         (a, b) => a.position - b.position
-    );
+    ) || [];
 
     return (
         <>
@@ -143,105 +200,111 @@ export default function PlaylistDetailsComponent() {
                     </Stack>
                 }
                 content={
-                    <DragDropContext onDragEnd={handleDragEnd}>
-                        <Droppable droppableId="droppable-medias">
-                            {(provided) => (
-                                <div
-                                    {...provided.droppableProps}
-                                    ref={provided.innerRef}
-                                    style={{
-                                        maxHeight: 'calc(94vh - 200px)',
-                                        overflowY: 'scroll',
-                                        scrollbarWidth: 'none',
-                                        msOverflowStyle: 'none',
-                                        width: '100%'
-                                    }}
-                                >
-                                    {sortedMedias.length > 0 ? (
-                                        <Table size="small">
-                                            <TableBody>
-                                                {sortedMedias.map((media, index) => (
-                                                    <Draggable
-                                                        key={media.id}
-                                                        draggableId={String(media.id)}
-                                                        index={index}
-                                                    >
-                                                        {(provided) => (
-                                                            <TableRow
-                                                                ref={provided.innerRef}
-                                                                {...provided.draggableProps}
-                                                                {...provided.dragHandleProps}
-                                                            >
-                                                                <TableCell sx={{padding: '0px'}} align="left">
-                                                                    <IconButton>
-                                                                        <DragHandleIcon sx={{ color: 'secondary.main' }} />
-                                                                    </IconButton>
-                                                                </TableCell>
-                                                                <TableCell sx={{
-                                                                    maxWidth: '14vh',
-                                                                    maxHeight: '7vh',
-                                                                }}>
-                                                                    {media.type.split('/')[0] === 'video' ? (
-                                                                        <Box
-                                                                            sx={{
-                                                                                maxWidth: '14vh',
-                                                                                maxHeight: '7vh',
-                                                                            }}
-                                                                            component="video"
-                                                                            alt={media.original_file_name}
-                                                                            src={`${media.path}#t=10`}
+                    loading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : (
+                        <DragDropContext onDragEnd={handleDragEnd}>
+                            <Droppable droppableId="droppable-medias">
+                                {(provided) => (
+                                    <div
+                                        {...provided.droppableProps}
+                                        ref={provided.innerRef}
+                                        style={{
+                                            maxHeight: 'calc(94vh - 200px)',
+                                            overflowY: 'scroll',
+                                            scrollbarWidth: 'none',
+                                            msOverflowStyle: 'none',
+                                            width: '100%'
+                                        }}
+                                    >
+                                        {sortedMedias.length > 0 ? (
+                                            <Table size="small">
+                                                <TableBody>
+                                                    {sortedMedias.map((media, index) => (
+                                                        <Draggable
+                                                            key={media.id}
+                                                            draggableId={String(media.id)}
+                                                            index={index}
+                                                        >
+                                                            {(provided) => (
+                                                                <TableRow
+                                                                    ref={provided.innerRef}
+                                                                    {...provided.draggableProps}
+                                                                    {...provided.dragHandleProps}
+                                                                >
+                                                                    <TableCell sx={{padding: '0px'}} align="left">
+                                                                        <IconButton>
+                                                                            <DragHandleIcon sx={{ color: 'secondary.main' }} />
+                                                                        </IconButton>
+                                                                    </TableCell>
+                                                                    <TableCell sx={{
+                                                                        maxWidth: '14vh',
+                                                                        maxHeight: '7vh',
+                                                                    }}>
+                                                                        {media.type === 'video' || (media.type && media.type.split('/')[0] === 'video') ? (
+                                                                            <Box
+                                                                                sx={{
+                                                                                    maxWidth: '14vh',
+                                                                                    maxHeight: '7vh',
+                                                                                }}
+                                                                                component="video"
+                                                                                alt={media.original_file_name}
+                                                                                src={`${media.path}#t=10`}
+                                                                            />
+                                                                        ) : media.type === 'image' || (media.type && media.type.split('/')[0] === 'image') ? (
+                                                                            <Box
+                                                                                sx={{
+                                                                                    height: '100%',
+                                                                                    width: '100%',
+                                                                                    maxWidth: '14vh',
+                                                                                    maxHeight: '7vh',
+                                                                                }}
+                                                                                component="img"
+                                                                                alt={media.original_file_name}
+                                                                                src={`${media.path}`}
+                                                                            />
+                                                                        ) : (
+                                                                            <Typography>{media.type || 'Unknown type'}</Typography>
+                                                                        )}
+                                                                    </TableCell>
+                                                                    <TableCell align="right">
+                                                                        <TextField
+                                                                            value={media.duration}
+                                                                            onChange={(e) => handleMediaDurationChange(e as React.ChangeEvent<HTMLInputElement>, media.id)}
+                                                                            size="small"
+                                                                            type="number"
+                                                                            disabled={media.type === 'video' || (media.type && media.type.split('/')[0] === 'video')}
+                                                                            inputProps={{ min: 0, max: 999 }}
+                                                                            style={{ width: '100%', maxWidth: '90px' }}
                                                                         />
-                                                                    ) : media.type.split('/')[0] === 'image' ? (
-                                                                        <Box
-                                                                            sx={{
-                                                                                height: '100%',
-                                                                                width: '100%',
-                                                                                maxWidth: '14vh',
-                                                                                maxHeight: '7vh',
-                                                                            }}
-                                                                            component="img"
-                                                                            alt={media.original_file_name}
-                                                                            src={`${media.path}`}
-                                                                        />
-                                                                    ) : (
-                                                                        <Typography>{media.type}</Typography>
-                                                                    )}
-                                                                </TableCell>
-                                                                <TableCell align="right">
-                                                                    <TextField
-                                                                        value={media.duration}
-                                                                        onChange={(e) => handleMediaDurationChange(e as React.ChangeEvent<HTMLInputElement>, media.id)}
-                                                                        size="small"
-                                                                        type="number"
-                                                                        disabled={media.type.split('/')[0] === 'video'}
-                                                                        inputProps={{ min: 0, max: 999 }}
-                                                                        style={{ width: '100%', maxWidth: '90px' }}
-                                                                    />
-                                                                    <Typography variant="caption" display="block" gutterBottom>
-                                                                        secondes
-                                                                    </Typography>
-                                                                </TableCell>
-                                                                <TableCell sx={{padding: '0px'}} align="right">
-                                                                    <IconButton
-                                                                        onClick={() => handleDeleteMedia(media.id)}
-                                                                    >
-                                                                        <ClearIcon sx={{ color: 'secondary.main' }} />
-                                                                    </IconButton>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        )}
-                                                    </Draggable>
-                                                ))}
-                                                {provided.placeholder}
-                                            </TableBody>
-                                        </Table>
-                                    ) : (
-                                        <Typography>This playlist has no media. Add some to get started.</Typography>
-                                    )}
-                                </div>
-                            )}
-                        </Droppable>
-                    </DragDropContext>
+                                                                        <Typography variant="caption" display="block" gutterBottom>
+                                                                            secondes
+                                                                        </Typography>
+                                                                    </TableCell>
+                                                                    <TableCell sx={{padding: '0px'}} align="right">
+                                                                        <IconButton
+                                                                            onClick={() => handleDeleteMedia(media.id)}
+                                                                        >
+                                                                            <ClearIcon sx={{ color: 'secondary.main' }} />
+                                                                        </IconButton>
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            )}
+                                                        </Draggable>
+                                                    ))}
+                                                    {provided.placeholder}
+                                                </TableBody>
+                                            </Table>
+                                        ) : (
+                                            <Typography>This playlist has no media. Add some to get started.</Typography>
+                                        )}
+                                    </div>
+                                )}
+                            </Droppable>
+                        </DragDropContext>
+                    )
                 }
                 headerLeft={
                     <IconButton

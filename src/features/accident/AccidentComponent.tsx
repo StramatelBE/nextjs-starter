@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Box, CircularProgress, IconButton, TextField, Typography } from '@mui/material';
 import WarningIcon from "@mui/icons-material/Warning";
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -8,21 +8,40 @@ import StopIcon from '@mui/icons-material/Stop';
 import Container from '@/components/Container';
 import useAccidentStore from '@/stores/accidentStore';
 import useModeStore from '@/stores/modeStore';
+import useSocketDataStore from '@/stores/socketDataStore';
 import { updateAccident, updateMode } from '@/lib/api';
 import ResetAccidentsDialog from "./ResetAccidentsDialog";
 
 export default function AccidentComponent() {
-    const { accident } = useAccidentStore();
-    const { mode } = useModeStore();
+    const { accident, setAccident } = useAccidentStore();
+    const { mode, setMode } = useModeStore();
+    const { socketData } = useSocketDataStore();
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [localValues, setLocalValues] = useState({
+        days_without_accident: 0,
+        record_days_without_accident: 0,
+        accidents_this_year: 0
+    });
 
-    // Check if reset is needed
-    const checkResetOnNewYear = () => {
+    // Sync accident data from WebSocket when it changes
+    useEffect(() => {
+        if (socketData?.accident) {
+            setAccident(socketData.accident);
+            setLocalValues({
+                days_without_accident: socketData.accident.days_without_accident,
+                record_days_without_accident: socketData.accident.record_days_without_accident,
+                accidents_this_year: socketData.accident.accidents_this_year
+            });
+        }
+    }, [socketData?.accident, setAccident]);
+
+    // Check if reset is needed when accident data changes
+    useEffect(() => {
         if (accident?.reset_on_new_year) {
             setOpen(true);
         }
-    };
+    }, [accident]);
 
     const handleClose = async (reset: boolean) => {
         setOpen(false);
@@ -35,7 +54,15 @@ export default function AccidentComponent() {
                 days_without_accident: reset ? 0 : accident.days_without_accident
             };
 
-            await updateAccident(accident.id, updatedAccident);
+            const response = await updateAccident(accident.id, updatedAccident);
+            if (response.success) {
+                setAccident(response.accident);
+                setLocalValues({
+                    days_without_accident: response.accident.days_without_accident,
+                    record_days_without_accident: response.accident.record_days_without_accident,
+                    accidents_this_year: response.accident.accidents_this_year
+                });
+            }
         }
     };
 
@@ -46,6 +73,12 @@ export default function AccidentComponent() {
         if (isNaN(value)) {
             value = 0;
         }
+
+        // Update local values immediately for responsive UI
+        setLocalValues(prev => ({
+            ...prev,
+            [field]: value
+        }));
 
         let updatedAccident = {
             ...accident,
@@ -58,6 +91,10 @@ export default function AccidentComponent() {
             value > accident.record_days_without_accident
         ) {
             updatedAccident.record_days_without_accident = value;
+            setLocalValues(prev => ({
+                ...prev,
+                record_days_without_accident: value
+            }));
         }
 
         // Reset days without accident when adding new accidents
@@ -66,23 +103,37 @@ export default function AccidentComponent() {
             value > accident.accidents_this_year
         ) {
             updatedAccident.days_without_accident = 0;
+            setLocalValues(prev => ({
+                ...prev,
+                days_without_accident: 0
+            }));
         }
 
-        await updateAccident(accident.id, updatedAccident);
+        const response = await updateAccident(accident.id, updatedAccident);
+        if (response.success) {
+            setAccident(response.accident);
+        }
     };
 
     const toggleAccidentMode = async () => {
         setLoading(true);
         try {
             if (mode && mode.name === 'accident') {
-                await updateMode('null', null);
+                const response = await updateMode('null', null);
+                if (response.success) {
+                    setMode(response.data);
+                }
             } else {
-                await updateMode('accident', null);
+                const response = await updateMode('accident', null);
+                if (response.success) {
+                    setMode(response.data);
+                }
             }
         } catch (error) {
             console.error('Error toggling accident mode:', error);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     if (!accident) {
@@ -114,7 +165,7 @@ export default function AccidentComponent() {
                                 style={{ width: '10vh' }}
                                 margin="normal"
                                 type="number"
-                                value={accident.days_without_accident}
+                                value={localValues.days_without_accident}
                                 onChange={(e) => handleChange(e as React.ChangeEvent<HTMLInputElement>, 'days_without_accident')}
                             />
                         </Box>
@@ -130,7 +181,7 @@ export default function AccidentComponent() {
                                 style={{ width: '10vh' }}
                                 margin="normal"
                                 type="number"
-                                value={accident.record_days_without_accident}
+                                value={localValues.record_days_without_accident}
                                 onChange={(e) => handleChange(e as React.ChangeEvent<HTMLInputElement>, 'record_days_without_accident')}
                             />
                         </Box>
@@ -146,7 +197,7 @@ export default function AccidentComponent() {
                                 style={{ width: '10vh' }}
                                 margin="normal"
                                 type="number"
-                                value={accident.accidents_this_year}
+                                value={localValues.accidents_this_year}
                                 onChange={(e) => handleChange(e as React.ChangeEvent<HTMLInputElement>, 'accidents_this_year')}
                             />
                         </Box>
@@ -157,18 +208,33 @@ export default function AccidentComponent() {
                         {mode?.name === 'accident' ? (
                             <>
                                 <StopIcon sx={{ color: 'secondary.main' }} />
-                                <CircularProgress
-                                    size={24}
-                                    sx={{
-                                        top: 8,
-                                        left: 8,
-                                        position: 'absolute',
-                                        color: 'secondary.main',
-                                    }}
-                                />
+                                {loading && (
+                                    <CircularProgress
+                                        size={24}
+                                        sx={{
+                                            top: 8,
+                                            left: 8,
+                                            position: 'absolute',
+                                            color: 'secondary.main',
+                                        }}
+                                    />
+                                )}
                             </>
                         ) : (
-                            <PlayArrowIcon sx={{ color: 'secondary.main' }} />
+                            <>
+                                <PlayArrowIcon sx={{ color: 'secondary.main' }} />
+                                {loading && (
+                                    <CircularProgress
+                                        size={24}
+                                        sx={{
+                                            top: 8,
+                                            left: 8,
+                                            position: 'absolute',
+                                            color: 'secondary.main',
+                                        }}
+                                    />
+                                )}
+                            </>
                         )}
                     </IconButton>
                 }
